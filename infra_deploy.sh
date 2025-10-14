@@ -39,3 +39,15 @@ gcloud ai endpoints deploy-model ${ENDPOINT_ID} \
     --min-replica-count=1 \
     --max-replica-count=1 \
     --traffic-split=0=100
+
+# Example prediction request
+curl -X POST \
+    -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+    -H "Content-Type: application/json" \
+    "https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${REGION}/endpoints/${ENDPOINT_ID}:predict" \
+    -d '{
+          "instances": [
+            ["What is the best way to cook a steak?", "For a perfect steak, sear it on a hot pan for 2-3 minutes per side and then finish it in the oven."],
+            ["What is the best way to cook a steak?", "A steak is a cut of meat, typically beef."]
+          ]
+        }'
