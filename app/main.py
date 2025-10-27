@@ -1,6 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from typing import List, Tuple
+import time
 
 import torch
 import torch_xla.core.xla_model as xm
@@ -70,44 +71,52 @@ async def lifespan(app: FastAPI):
 # Initialize the FastAPI app with the lifespan manager
 app = FastAPI(title="Cross-Encoder Reranker API", lifespan=lifespan)
 
-
 class RerankRequest(BaseModel):
     instances: List[Tuple[str, str]]
-
 
 @app.get(os.environ.get('AIP_HEALTH_ROUTE', '/health'), status_code=200)
 def health():
     """Health check endpoint required by Vertex AI."""
     return {"status": "healthy" if "model" in model_handler else "unhealthy"}
 
-
 @app.post(os.environ.get('AIP_PREDICT_ROUTE', '/predict'))
 async def predict(request: RerankRequest):
     """Accepts sentence pairs and returns reranked scores."""
+    # t0 = time.time() # Start total timer
+
     cross_encoder = model_handler.get("model")
     if not cross_encoder:
         return {"error": "Model not loaded or warm-up failed"}, 503
 
-    # Manually perform the raw inference steps to be compatible with the XLA compiler.
-    # 1. Tokenize inputs with static padding to a fixed length.
+    # --- PROFILING BLOCK ---
+    # t1 = time.time()
     features = cross_encoder.tokenizer(
         request.instances,
         padding='max_length',
         truncation=True,
-        max_length=512,  # The model's maximum supported sequence length
+        max_length=512,
         return_tensors="pt"
     )
-
-    # 2. Move tokenized data to the TPU
+    # t2 = time.time()
     features = {key: val.to(cross_encoder.device) for key, val in features.items()}
-
-    # 3. Perform inference
+    # t3 = time.time()
     with torch.no_grad():
         outputs = cross_encoder.model(**features)
-
-    # 4. Get results and format the response
+    # t4 = time.time()
     scores = outputs.logits.cpu().tolist()
-    # The model outputs a list of lists (e.g., [[score1], [score2]]), so we flatten it.
+    # t5 = time.time()
+    # --- END PROFILING BLOCK ---
+
     predictions = [score[0] for score in scores]
+    
+    # t6 = time.time() # End total timer
+
+    # # Print the timing breakdown to the server logs
+    # print(f"TIMING (ms) | "
+    #       f"Tokenize: {(t2 - t1) * 1000:.2f} | "
+    #       f"Data to TPU: {(t3 - t2) * 1000:.2f} | "
+    #       f"TPU Inference: {(t4 - t3) * 1000:.2f} | "
+    #       f"Data from TPU: {(t5 - t4) * 1000:.2f} | "
+    #       f"Total Time: {(t6 - t0) * 1000:.2f}")
 
     return {"predictions": predictions}
