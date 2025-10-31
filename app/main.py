@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     try:
         # 1. Acquire the TPU hardware device
         device = xm.xla_device()
-        print("✅ Successfully acquired TPU device.")
+        print("Successfully acquired TPU device.")
 
         # 2. Load the pre-trained model from Hugging Face
         model_name = 'cross-encoder/ms-marco-MiniLM-L12-v2'
@@ -34,12 +34,12 @@ async def lifespan(app: FastAPI):
         model.model.eval()
 
         model_handler["model"] = model
-        print(f"✅ Model '{model_name}' loaded and set to eval mode.")
+        print(f"Model '{model_name}' loaded and set to eval mode.")
 
         # --- 4. END-TO-END WARM-UP ROUTINE ---
         # Pre-compiles the model for common batch sizes to eliminate "cold starts".
         # This is the key to achieving consistently low latency.
-        print("🔥 Starting end-to-end model warm-up...")
+        print("Starting end-to-end model warm-up...")
         warmup_batch_sizes = [1, 2, 4, 8]  # Common batch sizes to pre-compile
         dummy_input = [["query", "document"]]
 
@@ -56,15 +56,15 @@ async def lifespan(app: FastAPI):
                 # The .cpu() call is critical to warm up the TPU->CPU data transfer
                 _ = outputs.logits.cpu()
 
-        print("✅ Warm-up complete. Endpoint is fully ready for traffic.")
+        print("Warm-up complete. Endpoint is fully ready for traffic.")
 
     except Exception as e:
-        print(f"⚠️ An error occurred during startup or warm-up: {e}")
+        print(f"An error occurred during startup or warm-up: {e}")
         model_handler.clear()
 
     yield  # The application runs here
 
-    print("👋 Server shutting down...")
+    print("Server shutting down...")
     model_handler.clear()
 
 
