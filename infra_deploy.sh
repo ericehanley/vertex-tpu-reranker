@@ -3,8 +3,8 @@ export REGION="us-central1" # Ensure this region supports v5e TPUs
 export REPO_NAME="reranker-repo"
 export IMAGE_NAME="tpu-reranker-server"
 export IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:latest"
-export MODEL_DISPLAY_NAME="tpu-reranker-model"
-export ENDPOINT_DISPLAY_NAME="tpu-reranker-endpoint"
+export MODEL_DISPLAY_NAME="tpu-reranker-model-compile"
+export ENDPOINT_DISPLAY_NAME="tpu-reranker-endpoint-compile"
 
 gcloud artifacts repositories create ${REPO_NAME} \
     --repository-format=docker \
@@ -22,14 +22,14 @@ gcloud ai models upload \
     --container-ports="8080"
 
 # Note down the MODEL_ID from the output of the command above
-export MODEL_ID="6409566750236475392"
+export MODEL_ID="5061055321187811328"
 
 gcloud ai endpoints create \
     --region=${REGION} \
     --display-name=${ENDPOINT_DISPLAY_NAME}
 
 # Note down the ENDPOINT_ID from the output
-export ENDPOINT_ID="8539945295843164160"
+export ENDPOINT_ID="8992042486952099840"
 
 gcloud ai endpoints deploy-model ${ENDPOINT_ID} \
     --region=${REGION} \

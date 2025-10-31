@@ -1,15 +1,14 @@
 # Use a standard Python base image
 FROM us-central1-docker.pkg.dev/tpu-pytorch-releases/docker/xla:r2.6.0_3.10_tpuvm_cxx11
-
 # Set the working directory inside the container
-WORKDIR /app
+WORKDIR /app_encoder
 
 # Copy the requirements file and install dependencies
-COPY ./app/requirements.txt .
+COPY ./app_encoder/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code into the container
-COPY ./app/ .
+COPY ./app_encoder/ .
 
 # Expose the port the server will run on
 EXPOSE 8080

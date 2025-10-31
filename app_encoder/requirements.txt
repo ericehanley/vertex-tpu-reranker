@@ -1,0 +1,10 @@
+# API support
+fastapi
+uvicorn[standard]
+sentence-transformers
+pydantic
+
+# PyTorch and TorchXLA for TPU support
+torch
+torchvision
+torch_xla

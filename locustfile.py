@@ -6,7 +6,7 @@ from locust import HttpUser, task, between
 # Set these in your terminal for flexibility, e.g., export ENDPOINT_ID="..."
 PROJECT_ID = os.getenv("PROJECT_ID", os.popen("gcloud config get-value project").read().strip())
 REGION = os.getenv("REGION", "us-central1")
-ENDPOINT_ID = os.getenv("ENDPOINT_ID", "8539945295843164160")
+ENDPOINT_ID = os.getenv("ENDPOINT_ID", "8992042486952099840")
 
 # --- Test Data Payloads ---
 # A single, organized dictionary for all test cases.
@@ -58,9 +58,9 @@ class VertexAIUser(HttpUser):
     # It's best to only have ONE task active at a time for clean results.
 
     # --- Small Payload Tests ---
-    # @task
-    # def test_small_batch_1(self):
-    #     self.client.post(self.predict_path, json=PAYLOADS["small"][1], name="/predict_small_batch_1")
+    @task
+    def test_small_batch_1(self):
+        self.client.post(self.predict_path, json=PAYLOADS["small"][1], name="/predict_small_batch_1")
 
     # @task
     # def test_small_batch_4(self):
@@ -94,6 +94,6 @@ class VertexAIUser(HttpUser):
     # def test_large_batch_4(self):
     #     self.client.post(self.predict_path, json=PAYLOADS["large"][4], name="/predict_large_batch_4")
         
-    @task
-    def test_large_batch_8(self):
-        self.client.post(self.predict_path, json=PAYLOADS["large"][8], name="/predict_large_batch_8")
+    # @task
+    # def test_large_batch_8(self):
+    #     self.client.post(self.predict_path, json=PAYLOADS["large"][8], name="/predict_large_batch_8")
