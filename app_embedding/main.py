@@ -1,4 +1,5 @@
 import os
+import traceback
 from contextlib import asynccontextmanager
 from typing import List
 
@@ -14,13 +15,13 @@ from transformers import BatchEncoding
 model_handler = {}
 
 # --- CHOOSE YOUR MODEL ---
-MODEL_NAME = 'sentence-transformers/all-distilroberta-v1'
-# MODEL_NAME = 'mixedbread-ai/mxbai-embed-large-v1'
+#MODEL_NAME = 'sentence-transformers/all-distilroberta-v1'
+MODEL_NAME = 'mixedbread-ai/mxbai-embed-large-v1'
 
 
 # --- HELPER FUNCTION FOR POOLING ---
 def mean_pooling(model_output, attention_mask: torch.Tensor) -> torch.Tensor:
-    token_embeddings = model_output.last_hidden_state
+    token_embeddings = model_output['token_embeddings']
     input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
     sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
     sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
@@ -44,46 +45,50 @@ async def lifespan(app: FastAPI):
             trust_remote_code=trust_remote
         )
         
+        # --- CHANGE #1: Get the model's max sequence length ---
+        max_seq_len = model_container.max_seq_length
+        print(f"Model max sequence length set to: {max_seq_len}")
+
         tokenizer = model_container.tokenizer
-        model = model_container[0]  # Access the pure transformer model
+        model = model_container[0]
         model.to(device)
         model.eval()
         print(f"Model loaded in float32 precision and set to eval mode.")
 
         print("Compiling the core model with the 'openxla' backend...")
         compiled_model = torch.compile(model, backend="openxla")
-        
+
         model_handler["compiled_model"] = compiled_model
         model_handler["tokenizer"] = tokenizer
+        model_handler["max_seq_len"] = max_seq_len # Store for use in predict
         print("Model compilation complete.")
 
         print("Starting end-to-end model warm-up...")
-        warmup_batch_sizes = [1, 2, 4, 8, 16, 32] 
+        warmup_batch_sizes = [1, 2, 4, 8]
         dummy_input = ["This is a warmup sentence."]
 
         for batch_size in warmup_batch_sizes:
-            print(f"   - Warming up for batch size: {batch_size}...")
-            
+            print(f"     - Warming up for batch size: {batch_size}...")
+
+            # --- CHANGE #2: Modify tokenizer call for static shapes ---
             tokenized_input = tokenizer(
                 dummy_input * batch_size,
-                padding=True,
+                padding='max_length',  # Use max_length padding
                 truncation=True,
+                max_length=max_seq_len,  # Specify the length
                 return_tensors='pt'
             ).to(device)
 
-            
             with torch.no_grad():
-
                 model_output = compiled_model(tokenized_input)
-                
                 embeddings = mean_pooling(model_output, tokenized_input['attention_mask'])
-
             _ = embeddings[0].cpu()
 
         print("✅ Warm-up complete. Endpoint is fully ready for traffic.")
 
     except Exception as e:
-        print(f"❌ An error occurred during startup or warm-up: {e}")
+        print(f"❌ An error occurred during startup or warm-up:")
+        traceback.print_exc()
         model_handler.clear()
 
     yield
@@ -113,23 +118,24 @@ def health():
 async def predict(request: EmbeddingRequest):
     compiled_model = model_handler.get("compiled_model")
     tokenizer = model_handler.get("tokenizer")
-    
-    if not compiled_model or not tokenizer:
-        return {"error": "Model not loaded or warm-up failed"}, 503
-    
-    device = next(compiled_model.parameters()).device
+    max_seq_len = model_handler.get("max_seq_len")
 
+    if not all([compiled_model, tokenizer, max_seq_len]):
+        return {"error": "Model not loaded or warm-up failed"}, 503
+
+    device = xm.xla_device()
+
+    # --- CHANGE #3: Modify tokenizer call for static shapes here too ---
     tokenized_input = tokenizer(
         request.instances,
-        padding=True,
+        padding='max_length', # Use max_length padding
         truncation=True,
+        max_length=max_seq_len, # Specify the length
         return_tensors='pt'
     ).to(device)
 
     with torch.no_grad():
-
         model_output = compiled_model(tokenized_input)
-        
         embeddings = mean_pooling(model_output, tokenized_input['attention_mask'])
         embeddings = F.normalize(embeddings, p=2, dim=1)
 
