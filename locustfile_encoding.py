@@ -1,5 +1,7 @@
 import os
 import subprocess
+import time
+from threading import Lock
 from locust import HttpUser, task, between
 
 # --- Configuration ---
@@ -33,6 +35,27 @@ for size in ["small", "medium", "large"]:
     PAYLOADS[size][8] = {"instances": PAYLOADS[size][1]["instances"] * 8}
 
 
+# --- Thread-Safe Token Caching ---
+# We will store the token globally and use a lock to ensure only
+# one user refreshes it when it expires.
+AUTH_TOKEN = None
+TOKEN_EXPIRATION_SECONDS = 3000  # 50 minutes, gcloud tokens last 60 mins
+TOKEN_FETCH_TIME = 0
+token_lock = Lock()
+
+def get_auth_token():
+    """Fetches a new auth token using gcloud."""
+    print("Refreshing auth token...")
+    token = subprocess.run(
+        ["gcloud", "auth", "print-access-token"],
+        capture_output=True, text=True
+    ).stdout.strip()
+    
+    if not token:
+        raise Exception("Failed to get gcloud auth token. Is gcloud configured?")
+    
+    return token
+
 class VertexAIUser(HttpUser):
     """A user that sends reranking requests to a Vertex AI TPU endpoint."""
     
@@ -41,14 +64,27 @@ class VertexAIUser(HttpUser):
     predict_path = f"/v1/projects/{PROJECT_ID}/locations/{REGION}/endpoints/{ENDPOINT_ID}:predict"
 
     def on_start(self):
-        """Authenticates the user when it starts."""
-        token = subprocess.run(
-            ["gcloud", "auth", "print-access-token"],
-            capture_output=True, text=True
-        ).stdout.strip()
+        """
+        Authenticates the user when it starts.
+        Uses a thread-safe, caching mechanism.
+        """
+        global AUTH_TOKEN, TOKEN_FETCH_TIME
         
+        now = time.time()
+        
+        # Refresh token if it's None or older than 50 minutes
+        if not AUTH_TOKEN or (now - TOKEN_FETCH_TIME > TOKEN_EXPIRATION_SECONDS):
+            # Use a lock to ensure only one thread refreshes the token
+            with token_lock:
+                # Re-check the condition inside the lock in case another
+                # thread refreshed it while this one was waiting.
+                if not AUTH_TOKEN or (now - TOKEN_FETCH_TIME > TOKEN_EXPIRATION_SECONDS):
+                    AUTH_TOKEN = get_auth_token()
+                    TOKEN_FETCH_TIME = now
+        
+        # All users get the same, valid token
         self.client.headers = {
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {AUTH_TOKEN}",
             "Content-Type": "application/json"
         }
 
@@ -88,7 +124,7 @@ class VertexAIUser(HttpUser):
     # --- Large Payload Tests ---
     # @task
     # def test_large_batch_1(self):
-    #     self.client.post(self.predict_path, json=PAYLOADS["large"][1], name="/predict_large_batch_1")
+    .client.post(self.predict_path, json=PAYLOADS["large"][1], name="/predict_large_batch_1")
 
     # @task
     # def test_large_batch_4(self):

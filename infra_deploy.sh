@@ -8,11 +8,11 @@
 
 export PROJECT_ID=$(gcloud config get-value project)
 export REGION="us-central1" # ensure this region supports v5e TPUs
-export REPO_NAME="tpu-roberta-v1-repo" # update accordingly
-export IMAGE_NAME="tpu-roberta-v1-server" # update accordingly
+export REPO_NAME="tpu-roberta-v2-repo" # update accordingly
+export IMAGE_NAME="tpu-roberta-v2-server" # update accordingly
 export IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:latest"
-export MODEL_DISPLAY_NAME="tpu-roberta-v1-model" # update accordingly
-export ENDPOINT_DISPLAY_NAME="tpu-roberta-v1-endpoint" # update accordingly
+export MODEL_DISPLAY_NAME="tpu-roberta-v2-model" # update accordingly
+export ENDPOINT_DISPLAY_NAME="tpu-roberta-v2-endpoint" # update accordingly
 
 # create artifact repository
 gcloud artifacts repositories create ${REPO_NAME} \
@@ -34,7 +34,7 @@ gcloud ai models upload \
 
 # note down the MODEL_ID from the output of the command above
 # or Vertex UI and enter here
-export MODEL_ID="3229497647731572736"
+export MODEL_ID="5382218269614669824"
 
 # create endpoint
 gcloud ai endpoints create \
@@ -43,7 +43,7 @@ gcloud ai endpoints create \
 
 # note down the ENDPOINT_ID from the output of the command above
 # or Vertex UI and enter here
-export ENDPOINT_ID="7175965937214947328"
+export ENDPOINT_ID="5512730299831681024"
 
 # deploy model to endpoint
 gcloud ai endpoints deploy-model ${ENDPOINT_ID} \
@@ -74,7 +74,6 @@ curl -X POST \
     "https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${REGION}/endpoints/${ENDPOINT_ID}:predict" \
     -d '{
           "instances": [
-            ["What is the best way to cook a steak?", "For a perfect steak, sear it on a hot pan for 2-3 minutes per side and then finish it in the oven."],
-            ["What is the best way to cook a steak?", "A steak is a cut of meat, typically beef."]
+            "What is the best way to cook a steak?"
           ]
         }'
